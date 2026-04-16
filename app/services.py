@@ -3,6 +3,7 @@ import os
 import time
 import uuid
 import logging
+import textwrap
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -177,6 +178,114 @@ async def upload_image_to_blob(file: UploadFile) -> dict[str, Any]:
         "image_bytes": image_bytes,
         "content_type": upload_content_type,
     }
+
+
+def _build_trip_report_pdf_bytes(
+    *, city: str | None, itinerary: list[str], budget_estimate: str, tips: list[str]
+) -> bytes:
+    def _escape_pdf_text(value: str) -> str:
+        return (
+            value.replace("\\", "\\\\")
+            .replace("(", "\\(")
+            .replace(")", "\\)")
+            .replace("\r", " ")
+            .replace("\n", " ")
+        )
+
+    lines: list[str] = [
+        "Travel AI Report",
+        f"City: {city or 'unknown'}",
+        f"Budget Estimate: {budget_estimate}",
+        "",
+        "Itinerary:",
+    ]
+
+    if itinerary:
+        for index, item in enumerate(itinerary, start=1):
+            wrapped = textwrap.wrap(f"{index}. {item}", width=95) or [""]
+            lines.extend(wrapped)
+    else:
+        lines.append("No itinerary items provided.")
+
+    lines.extend(["", "Tips:"])
+    if tips:
+        for index, tip in enumerate(tips, start=1):
+            wrapped = textwrap.wrap(f"{index}. {tip}", width=95) or [""]
+            lines.extend(wrapped)
+    else:
+        lines.append("No tips provided.")
+
+    max_lines = 42
+    if len(lines) > max_lines:
+        lines = lines[: max_lines - 1] + ["... output truncated for single-page PDF report ..."]
+
+    content_ops = ["BT", "/F1 12 Tf"]
+    y_start = 780
+    line_step = 17
+    for index, line in enumerate(lines):
+        y_pos = y_start - (index * line_step)
+        if y_pos < 40:
+            break
+        content_ops.append(f"1 0 0 1 50 {y_pos} Tm ({_escape_pdf_text(line)}) Tj")
+    content_ops.append("ET")
+
+    content_stream = "\n".join(content_ops).encode("latin-1", errors="replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(content_stream)).encode("ascii") + b" >>\nstream\n" + content_stream + b"\nendstream",
+    ]
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for object_id, object_bytes in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{object_id} 0 obj\n".encode("ascii"))
+        pdf.extend(object_bytes)
+        pdf.extend(b"\nendobj\n")
+
+    xref_start = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        (
+            f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+            f"startxref\n{xref_start}\n%%EOF"
+        ).encode("ascii")
+    )
+
+    return bytes(pdf)
+
+
+def upload_trip_report_pdf_to_blob(
+    *, city: str | None, itinerary: list[str], budget_estimate: str, tips: list[str]
+) -> str:
+    pdf_bytes = _build_trip_report_pdf_bytes(
+        city=city,
+        itinerary=itinerary,
+        budget_estimate=budget_estimate,
+        tips=tips,
+    )
+    blob_name = f"reports/{uuid.uuid4().hex}.pdf"
+    blob_client = _get_blob_client(blob_name)
+
+    try:
+        blob_client.upload_blob(
+            pdf_bytes,
+            overwrite=False,
+            content_type="application/pdf",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to upload report PDF to Azure Blob Storage: {exc}",
+        ) from exc
+
+    return blob_client.url
 
 
 def _extract_json_payload(raw_text: str) -> dict[str, Any]:
