@@ -1,5 +1,14 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+"""
+Azure Blob Storage utility endpoints.
+
+Routes
+------
+GET  /blob/health        – Check blob storage connectivity
+POST /blob/upload-test   – Test an image upload
+"""
+
 from azure.storage.blob import BlobServiceClient
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.config import settings
 from app.services import upload_image_to_blob
@@ -11,17 +20,12 @@ router = APIRouter(prefix="/blob", tags=["blob"])
 def blob_health() -> dict[str, str]:
     try:
         if not settings.azure_blob_connection_string:
-            raise ValueError("AZURE_BLOB_CONNECTION_STRING is not configured")
-
+            raise ValueError("AZURE_BLOB_CONNECTION_STRING is not configured.")
         container_name = (settings.azure_blob_container_name or "").strip()
         if not container_name:
-            raise ValueError("AZURE_BLOB_CONTAINER_NAME is not configured")
-
-        client = BlobServiceClient.from_connection_string(
-            settings.azure_blob_connection_string
-        )
+            raise ValueError("AZURE_BLOB_CONTAINER_NAME is not configured.")
+        client = BlobServiceClient.from_connection_string(settings.azure_blob_connection_string)
         client.get_container_client(container_name)
-
         return {"status": "ok"}
     except Exception as exc:
         raise HTTPException(

@@ -1,18 +1,26 @@
+"""
+AI (AWS Bedrock Nova Lite) endpoints.
+
+Routes
+------
+POST /ai/process   – Upload image + optional prompt, get AI trip analysis [JWT]
+"""
+
 import logging
 import time
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.services import (
-    _get_or_create_demo_user,
     _trip_to_response_payload,
     call_nova_lite,
     save_trip_to_db,
-    upload_trip_report_pdf_to_blob,
     upload_image_to_blob,
+    upload_trip_report_pdf_to_blob,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -24,12 +32,15 @@ async def ai_process(
     image: UploadFile | None = File(default=None),
     prompt: str | None = Form(default=None),
     text: str | None = Form(default=None),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    prompt_used = (prompt or "").strip()
-    text_value = (text or "").strip()
-    if not prompt_used and text_value:
-        prompt_used = text_value
+    """
+    Analyse a travel image (and/or a text prompt) with AWS Bedrock Nova Lite.
+    Saves the resulting trip to Azure SQL and generates a PDF report in Azure Blob.
+    Requires a valid JWT — the trip is recorded against the authenticated user.
+    """
+    prompt_used = (prompt or "").strip() or (text or "").strip()
 
     if image is None and not prompt_used:
         raise HTTPException(
@@ -45,11 +56,8 @@ async def ai_process(
             uploaded = await upload_image_to_blob(image)
             image_url = uploaded["image_url"]
         except HTTPException:
-            logger.warning("AI process image upload failed")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Image upload failed.",
-            )
+            logger.warning("AI process: image upload failed")
+            raise HTTPException(status_code=502, detail="Image upload failed.")
 
     if not prompt_used:
         prompt_used = "Analyze this image and return travel JSON fields."
@@ -59,11 +67,8 @@ async def ai_process(
         ai_output = call_nova_lite(prompt_used, optional_image=uploaded)
         latency_ms = (time.perf_counter() - start) * 1000.0
     except HTTPException:
-        logger.warning("AI process Bedrock inference failed")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="AI inference failed.",
-        )
+        logger.warning("AI process: Bedrock inference failed")
+        raise HTTPException(status_code=502, detail="AI inference failed.")
 
     try:
         pdf_url = upload_trip_report_pdf_to_blob(
@@ -73,17 +78,13 @@ async def ai_process(
             tips=ai_output.get("tips", []),
         )
     except HTTPException:
-        logger.warning("AI process PDF upload failed")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="PDF upload failed.",
-        )
+        logger.warning("AI process: PDF upload failed")
+        raise HTTPException(status_code=502, detail="PDF upload failed.")
 
-    user = _get_or_create_demo_user(db)
     trip = save_trip_to_db(
         db,
         {
-            "user_id": user.id,
+            "user_id": current_user["user_id"],
             "detected_city": ai_output.get("city") or "unknown",
             "image_url": image_url or "text-only",
             "itinerary": ai_output["itinerary"],
@@ -96,7 +97,7 @@ async def ai_process(
         "model_id": settings.aws_bedrock_model_id,
         "region": settings.aws_region,
         "prompt_used": prompt_used,
-        "latency_ms": latency_ms,
+        "latency_ms": round(latency_ms, 2),
         "image_url": image_url,
         "pdf_url": pdf_url,
         "parsed": ai_output,

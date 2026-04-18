@@ -191,7 +191,7 @@ export function initLoginApp() {
         errorEl.style.display = "none";
         onLoginSuccess();
       } else {
-        errorEl.textContent = data.error || "Login failed.";
+        errorEl.textContent = data.detail || data.error || "Login failed.";
         errorEl.style.display = "block";
       }
     } catch {
@@ -305,7 +305,7 @@ async function handleRegisterUser() {
       hideRegisterModal();
       showLoginModal();
     } else {
-      regError.textContent = data.error || "Registration failed.";
+      regError.textContent = data.detail || data.error || "Registration failed.";
       regError.style.display = "block";
     }
   } catch {

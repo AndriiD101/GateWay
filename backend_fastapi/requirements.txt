@@ -1,0 +1,25 @@
+# Web framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# Auth & security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.9
+
+# Database – Azure SQL (MSSQL) via SQLAlchemy
+sqlalchemy>=2.0.0
+pyodbc>=5.1.0
+
+# Database – MySQL (for auth/chat tables, kept separate for compatibility)
+PyMySQL>=1.1.0
+
+# Azure Blob Storage
+azure-storage-blob>=12.19.0
+
+# AWS Bedrock (AI)
+boto3>=1.34.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic[email]>=2.0.0
