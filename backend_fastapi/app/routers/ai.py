@@ -10,6 +10,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -21,6 +22,7 @@ from app.services import (
     save_trip_to_db,
     upload_image_to_blob,
     upload_trip_report_pdf_to_blob,
+    _get_or_create_demo_user,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -81,16 +83,25 @@ async def ai_process(
         logger.warning("AI process: PDF upload failed")
         raise HTTPException(status_code=502, detail="PDF upload failed.")
 
-    trip = save_trip_to_db(
-        db,
-        {
-            "user_id": current_user["user_id"],
-            "detected_city": ai_output.get("city") or "unknown",
-            "image_url": image_url or "text-only",
-            "itinerary": ai_output["itinerary"],
-            "budget_estimate": ai_output["budget_estimate"],
-        },
-    )
+    try:
+        user = _get_or_create_demo_user(db)
+        trip = save_trip_to_db(
+            db,
+            {
+                "user_id": user.id,
+                "detected_city": ai_output.get("city") or "unknown",
+                "image_url": image_url or "text-only",
+                "itinerary": ai_output["itinerary"],
+                "budget_estimate": ai_output["budget_estimate"],
+            },
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("AI process database operation failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable. Check SQL connectivity/firewall settings.",
+        )
 
     return {
         "status": "success",

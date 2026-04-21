@@ -8,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+import bcrypt
 import boto3
 from botocore.exceptions import ClientError
 from azure.storage.blob import BlobServiceClient
@@ -301,6 +302,26 @@ def upload_trip_report_pdf_to_blob(
 
 
 # ── Trip DB helpers ───────────────────────────────────────────────────────────
+
+def _get_or_create_demo_user(db: Session) -> User:
+    """Get or create a demo user for testing purposes."""
+    demo_email = "demo@gateway.local"
+    
+    # Try to find existing demo user
+    user = db.query(User).filter(User.email == demo_email).first()
+    if user:
+        return user
+    
+    # Create new demo user
+    demo_password = "demo123"
+    password_hash = bcrypt.hashpw(demo_password.encode(), bcrypt.gensalt()).decode()
+    
+    user = User(email=demo_email, password_hash=password_hash)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
 
 def save_trip_to_db(db: Session, data: dict[str, Any]) -> Trip:
     itinerary = data.get("itinerary", [])
