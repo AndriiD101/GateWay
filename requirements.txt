@@ -13,3 +13,5 @@ azure-storage-blob==12.28.0
 boto3==1.42.88
 python-multipart==0.0.26
 email-validator==2.3.0
+passlib==1.7.4
+python-jose[cryptography]==3.4.0

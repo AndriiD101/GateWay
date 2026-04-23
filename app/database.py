@@ -47,6 +47,8 @@ def _adonet_to_odbc(raw_connection: str) -> str:
     encrypt = _normalize_odbc_bool(parts.get("encrypt"), default="yes")
     trust_cert = _normalize_odbc_bool(parts.get("trustservercertificate"), default="no")
     timeout = parts.get("connection timeout", "30")
+    connect_retry_count = parts.get("connectretrycount", "3")
+    connect_retry_interval = parts.get("connectretryinterval", "10")
 
     odbc_parts = [
         f"DRIVER={driver}",
@@ -57,6 +59,8 @@ def _adonet_to_odbc(raw_connection: str) -> str:
         f"Encrypt={encrypt}",
         f"TrustServerCertificate={trust_cert}",
         f"Connection Timeout={timeout}",
+        f"ConnectRetryCount={connect_retry_count}",
+        f"ConnectRetryInterval={connect_retry_interval}",
     ]
 
     return ";".join(item for item in odbc_parts if not item.endswith("=None")) + ";"
