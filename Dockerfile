@@ -26,10 +26,10 @@ RUN apt-get update \
 
 RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
-COPY requirements.txt ./
+COPY backend_fastapi/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY --chown=appuser:appuser app ./app
+COPY backend_fastapi/app ./app
 
 USER appuser
 
