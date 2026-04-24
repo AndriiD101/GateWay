@@ -12,7 +12,6 @@ services:
     volumes:
       - ./db-init/gateway_init_clean.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      # Використовуємо CMD-SHELL, щоб мати доступ до змінних середовища
       test:
         [
           "CMD-SHELL",
@@ -23,23 +22,48 @@ services:
       retries: 10
 
   web:
-    build: ./backend
+    build: ./backend_fastapi
     container_name: gateway_backend
+    ports:
+      - "8000:8000"
     environment:
+      # JWT
+      - SECRET_KEY=my-super-secret-jwt-key-32-chars-long!!!
+      - JWT_EXPIRE_HOURS=1
+      # MySQL (auth + chat)
       - DB_HOST=db
       - DB_PORT=3306
       - DB_USER=root
       - DB_PASSWORD=secretpassword
       - DB_NAME=gateway_db
-      - SECRET_KEY=my-super-secret-jwt-key-32-chars-long!!!
+      # Azure SQL (trips)
+      - AZURE_SQL_CONNECTION_STRING=${AZURE_SQL_CONNECTION_STRING}
+      # Azure Blob Storage
+      - AZURE_BLOB_CONNECTION_STRING=${AZURE_BLOB_CONNECTION_STRING}
+      - AZURE_BLOB_CONTAINER_NAME=${AZURE_BLOB_CONTAINER_NAME:-travel-images}
+      # AWS Bedrock (AI)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-eu-west-3}
+      - AWS_BEDROCK_MODEL_ID=${AWS_BEDROCK_MODEL_ID:-eu.amazon.nova-2-lite-v1:0}
+      - AWS_BEDROCK_INFERENCE_PROFILE_ID=${AWS_BEDROCK_INFERENCE_PROFILE_ID:-}
     depends_on:
       db:
         condition: service_healthy
 
-  frontend:
-    build: ./frontend
-    container_name: gateway_frontend
-    ports:
-      - "8080:80"
-    depends_on:
-      - web
+  # DEPRECATED: Use frontend-azure folder for independent deployment
+  # The frontend is now in a separate folder (frontend-azure/) for independent deployment to Azure
+  # To include frontend in local development, uncomment the section below:
+  #
+  # frontend:
+  #   build: ./frontend
+  #   container_name: gateway_frontend
+  #   ports:
+  #     - "3000:80"
+  #   environment:
+  #     - BACKEND_API_URL=http://web:8000
+  #   depends_on:
+  #     - web
+  #
+  # For independent frontend deployment, see frontend-azure/README.md and frontend-azure/AZURE_DEPLOYMENT.md
+

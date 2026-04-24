@@ -33,14 +33,11 @@ document.addEventListener("DOMContentLoaded", () => {
       activatePage("ai-section");
       return true;
     }
-
     openAuthModal(() => activatePage("ai-section"));
     return false;
   }
 
-  window.GatewayApp = {
-    activatePage,
-  };
+  window.GatewayApp = { activatePage };
 
   function activatePage(targetId) {
     if (!targetId) return;
@@ -63,36 +60,23 @@ document.addEventListener("DOMContentLoaded", () => {
     link.addEventListener("click", function (event) {
       event.preventDefault();
       const targetId = this.getAttribute("data-target");
-      if (targetId === "ai-section") {
-        gateAiAccess();
-        return;
-      }
-
+      if (targetId === "ai-section") { gateAiAccess(); return; }
       activatePage(targetId);
     });
   });
 
   if (startBtn) {
-    startBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      gateAiAccess();
-    });
+    startBtn.addEventListener("click", (e) => { e.preventDefault(); gateAiAccess(); });
   }
-
   if (loginButton) {
-    loginButton.addEventListener("click", (event) => {
-      event.preventDefault();
-      openAuthModal();
-    });
+    loginButton.addEventListener("click", (e) => { e.preventDefault(); openAuthModal(); });
   }
-
   if (aiAuthOpenBtn) {
-    aiAuthOpenBtn.addEventListener("click", (event) => {
-      event.preventDefault();
+    aiAuthOpenBtn.addEventListener("click", (e) => {
+      e.preventDefault();
       openAuthModal(() => activatePage("ai-section"));
     });
   }
-
   if (aiSection) {
     aiSection.addEventListener("click", (event) => {
       if (!isAuthenticated() && event.target.closest(".chat-wrapper")) {
@@ -112,13 +96,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const chatMessages = document.getElementById("chat-messages");
   const sendBtn = document.getElementById("send-btn");
   const imageUpload = document.getElementById("image-upload");
-  const imagePreviewContainer = document.getElementById(
-    "image-preview-container",
-  );
+  const imagePreviewContainer = document.getElementById("image-preview-container");
   const imagePreview = document.getElementById("image-preview");
   const removeImageBtn = document.getElementById("remove-image-btn");
 
   let currentImageFile = null;
+  let isWaitingForResponse = false;
+
+  /*** AUTH TOKEN HELPER ***/
+
+  function getAuthHeaders() {
+    const token = localStorage.getItem("gateway_jwt");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
 
   /*** IMAGE HANDLING ***/
 
@@ -139,8 +129,6 @@ document.addEventListener("DOMContentLoaded", () => {
     imagePreviewContainer.style.display = "none";
     imagePreview.src = "";
   }
-
-  /*** IMAGE UPLOAD LISTENERS ***/
 
   imageUpload.addEventListener("change", function () {
     if (this.files && this.files[0]) handleImage(this.files[0]);
@@ -203,9 +191,7 @@ document.addEventListener("DOMContentLoaded", () => {
       img.style.borderRadius = "8px";
       img.style.display = "block";
       img.style.marginBottom = text ? "8px" : "0";
-      img.onload = () => {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-      };
+      img.onload = () => { chatMessages.scrollTop = chatMessages.scrollHeight; };
       bubbleDiv.appendChild(img);
     }
 
@@ -219,29 +205,183 @@ document.addEventListener("DOMContentLoaded", () => {
     messageDiv.appendChild(bubbleDiv);
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    return messageDiv;
   }
+
+  /*** TYPING INDICATOR ***/
+
+  function showTypingIndicator() {
+    const messageDiv = document.createElement("div");
+    messageDiv.classList.add("message", "bot");
+    messageDiv.id = "typing-indicator";
+
+    const avatarDiv = document.createElement("div");
+    avatarDiv.classList.add("msg-avatar");
+    const avatarImg = document.createElement("img");
+    avatarImg.src = "/styles/pictures/gateway_logo_svg.svg";
+    avatarImg.alt = "AI";
+    avatarImg.width = 30;
+    avatarDiv.appendChild(avatarImg);
+
+    const bubbleDiv = document.createElement("div");
+    bubbleDiv.classList.add("msg-bubble");
+    bubbleDiv.innerHTML = "<em>Analyzing your request\u2026 \uD83C\uDF0D</em>";
+
+    messageDiv.appendChild(avatarDiv);
+    messageDiv.appendChild(bubbleDiv);
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function removeTypingIndicator() {
+    const indicator = document.getElementById("typing-indicator");
+    if (indicator) indicator.remove();
+  }
+
+  /*** PERSIST MESSAGE TO BACKEND ***/
+
+  async function persistMessage(role, message) {
+    try {
+      await fetch("/api/chat/message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ role, message }),
+      });
+    } catch { /* non-critical */ }
+  }
+
+  /*** FORMAT AI RESPONSE ***/
+
+  function formatAiResponse(parsed, trip) {
+    const city = parsed.city || trip?.detected_city || "your destination";
+    const budget = parsed.budget_estimate || trip?.budget_estimate || "N/A";
+    const itinerary = parsed.itinerary || [];
+    const tips = parsed.tips || [];
+
+    let text = `\uD83C\uDFD9\uFE0F ${city}\n`;
+    text += `\uD83D\uDCB0 Estimated budget: $${budget}\n\n`;
+
+    if (itinerary.length > 0) {
+      text += `\uD83D\uDCC5 Itinerary:\n`;
+      itinerary.forEach((item, i) => { text += `${i + 1}. ${item}\n`; });
+    }
+
+    if (tips.length > 0) {
+      text += `\n\uD83D\uDCA1 Travel Tips:\n`;
+      tips.forEach((tip) => { text += `\u2022 ${tip}\n`; });
+    }
+
+    return text.trim();
+  }
+
+  /*** CALL AI BACKEND ***/
+
+  async function callAiBackend(text, imageFile) {
+    const formData = new FormData();
+    if (text) formData.append("prompt", text);
+    if (imageFile) formData.append("image", imageFile);
+
+    const response = await fetch("/ai/process", {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: formData,
+    });
+
+    if (response.status === 401) {
+      openAuthModal(() => activatePage("ai-section"));
+      throw new Error("Not authenticated");
+    }
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || "AI service error. Please try again.");
+    }
+
+    return response.json();
+  }
+
+  /*** LOAD CHAT HISTORY ***/
+
+  async function loadChatHistory() {
+    try {
+      const response = await fetch("/api/chat/history", {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) return;
+
+      const messages = await response.json();
+      if (!messages || messages.length === 0) return;
+
+      // Clear default welcome message, then re-add it, then history
+      chatMessages.innerHTML = "";
+      addMessage(
+        "Hi! I\u2019m your AI travel assistant. Tell me about your dream trip - where you want to go, for how many days, and what your budget is. I\u2019ll help you plan the perfect itinerary!",
+        null,
+        false,
+      );
+
+      messages.forEach((msg) => {
+        addMessage(msg.message, null, msg.role === "user");
+      });
+    } catch { /* silently skip */ }
+  }
+
+  /*** EXPOSED FOR gateway_auth.js ***/
+
+  window.initChatApp = function () {
+    loadChatHistory();
+  };
 
   /*** SEND MESSAGE ***/
 
-  function handleSend() {
+  async function handleSend() {
     if (!isAuthenticated()) {
       openAuthModal(() => activatePage("ai-section"));
       return;
     }
 
-    const text = userInput.value.trim();
+    if (isWaitingForResponse) return;
 
+    const text = userInput.value.trim();
     if (!text && !currentImageFile) return;
 
     addMessage(text, currentImageFile, true);
+    const sentImage = currentImageFile;
 
     userInput.value = "";
     userInput.style.height = "auto";
     clearImage();
 
-    setTimeout(() => {
-      addMessage("One moment, analyzing your request... 🌍", null, false);
-    }, 1000);
+    if (text) await persistMessage("user", text);
+
+    isWaitingForResponse = true;
+    sendBtn.disabled = true;
+    showTypingIndicator();
+
+    try {
+      const result = await callAiBackend(text, sentImage);
+      removeTypingIndicator();
+
+      const aiText = formatAiResponse(result.parsed || {}, result.trip);
+      addMessage(aiText, null, false);
+      await persistMessage("assistant", aiText);
+
+      if (result.pdf_url) {
+        addMessage(
+          `\uD83D\uDCC4 <a href="${result.pdf_url}" target="_blank" rel="noopener" style="color:#fab85c;">Download your trip report (PDF)</a>`,
+          null,
+          false,
+        );
+      }
+    } catch (err) {
+      removeTypingIndicator();
+      if (err.message !== "Not authenticated") {
+        addMessage(`\u274C ${err.message || "Something went wrong. Please try again."}`, null, false);
+      }
+    } finally {
+      isWaitingForResponse = false;
+      sendBtn.disabled = false;
+    }
   }
 
   /*** EVENT LISTENERS ***/
@@ -255,10 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  if (
-    window.GatewayAuth &&
-    typeof window.GatewayAuth.refreshUi === "function"
-  ) {
+  if (window.GatewayAuth && typeof window.GatewayAuth.refreshUi === "function") {
     window.GatewayAuth.refreshUi();
   }
 });

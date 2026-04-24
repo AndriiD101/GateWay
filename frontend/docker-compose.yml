@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gateway_frontend
+    ports:
+      - "3000:80"
+    environment:
+      # Point to backend service
+      # For local development with separate backend container:
+      - BACKEND_API_URL=http://gateway_backend:8000
+      
+      # For Azure deployment, use your actual backend URL
+      # - BACKEND_API_URL=https://your-gateway-backend.azurewebsites.net
+    restart: unless-stopped
+
+  # Uncomment this section to run backend locally alongside frontend for testing
+  # db:
+  #   image: mysql:8.0
+  #   container_name: gateway_db
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: secretpassword
+  #     MYSQL_DATABASE: gateway_db
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - ./db-init/gateway_init_clean.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # backend:
+  #   build: ../backend_fastapi
+  #   container_name: gateway_backend
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - DB_HOST=db
+  #     - DB_PORT=3306
+  #     - DB_USER=root
+  #     - DB_PASSWORD=secretpassword
+  #     - DB_NAME=gateway_db
+  #   depends_on:
+  #     - db
