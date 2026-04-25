@@ -57,6 +57,16 @@ def on_startup() -> None:
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
+@app.get("/", tags=["health"])
+def root() -> dict:
+    return {
+        "status": "ok",
+        "service": "gateway-backend",
+        "health": "/health",
+        "docs": "/docs",
+    }
+
+
 @app.get("/health", tags=["health"])
 def health() -> dict:
     return {"status": "ok", "version": "2.0.0"}
