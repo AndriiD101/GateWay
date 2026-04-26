@@ -6,11 +6,14 @@
 
 ## Table of Contents
 
+- [Task Analysis](#task-analysis)
+- [Technology Choices](#technology-choices)
+- [Service Diagram](#service-diagram)
+- [Team Contributions](#team-contributions)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Prerequisites](#prerequisites)
-- [Environment Variables](#environment-variables)
 - [Running with Docker](#running-with-docker)
 - [API Reference](#api-reference)
 - [Database Schema](#database-schema)
@@ -18,6 +21,113 @@
 - [Frontend](#frontend)
 
 ---
+
+## Task Analysis
+
+The goal of the project was to build a web application that allows users to plan travel with the help of artificial intelligence. A user can upload a photo of a location or enter a text description of a destination, and the system automatically generates a personalised travel itinerary, a budget estimate, and travel tips.
+
+The task was divided into three main areas:
+
+**1. Authentication and user management** — The system must support registration, login, and roles (`user` / `admin`). Admins have extended permissions to manage users and view their data.
+
+**2. AI processing** — The core of the application is an integration with AWS Bedrock (Amazon Nova Lite model), which analyses images and/or text prompts and returns structured JSON data: the identified city, itinerary, estimated budget, and travel tips. The result is saved to the database and a PDF report is generated at the same time.
+
+**3. Frontend and user interface** — The application must be accessible via a web browser as a single-page application (SPA). The user interacts with the system through a chat-like interface, can upload images, and views results directly in the browser.
+
+An important requirement was containerisation of the entire solution using Docker, so that the application can be run on any environment without manual dependency configuration.
+
+---
+
+## Technology Choices
+
+**FastAPI (Python)** — Chosen for the backend due to its high performance, automatic OpenAPI documentation generation (`/docs`), and native support for asynchronous operations. Pydantic schemas ensure input data validation.
+
+**Azure SQL** — A relational database from Microsoft supporting MSSQL syntax. Used for persistent storage of users, trips, and chat history. The SQLAlchemy ORM provides a database-agnostic data access layer.
+
+**Azure Blob Storage** — Object storage for uploaded images and generated PDF reports. Well suited for unstructured files that would be inefficient to store directly in a SQL database.
+
+**AWS Bedrock (Amazon Nova Lite)** — A managed AI service from Amazon that provides access to multimodal language models without requiring own infrastructure. The Nova Lite model supports both image and text analysis and returns structured responses.
+
+**JWT (HS256)** — Stateless authentication via JSON Web Tokens eliminates the need for server-side session storage and works well in a containerised environment.
+
+**Nginx** — A lightweight web server used to serve the static frontend and as a reverse proxy to forward `/api` and `/ai` requests to the FastAPI backend.
+
+**Docker / Docker Compose** — Containerisation guarantees a consistent environment in both development and production. Docker Compose orchestrates the frontend and backend as separate services with a single command.
+
+**Vanilla JS (no framework)** — The frontend is implemented in plain JavaScript without a dependency on React or Vue, which reduces build complexity and bundle size for a relatively simple SPA.
+
+---
+
+## Service Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                          User (Browser)                          │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │ HTTP :8080
+                               ▼
+                  ┌────────────────────────┐
+                  │   Frontend (Nginx)      │
+                  │   HTML / CSS / JS       │
+                  │   port 8080             │
+                  └───────────┬────────────┘
+                              │ Reverse Proxy
+                              │ /api/*  →  :8000
+                              │ /ai/*   →  :8000
+                              ▼
+                  ┌────────────────────────┐
+                  │   Backend (FastAPI)     │
+                  │   Python 3.11          │
+                  │   Gunicorn + Uvicorn   │
+                  │   port 8000            │
+                  └──┬──────────┬──────────┘
+                     │          │          │
+          ┌──────────┘    ┌─────┘    ┌─────┘
+          ▼               ▼          ▼
+┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
+│  Azure SQL   │  │ Azure Blob   │  │   AWS Bedrock     │
+│  (MSSQL)     │  │  Storage     │  │  Nova Lite model  │
+│              │  │              │  │  (AI inference)   │
+│  users       │  │  images/     │  │                   │
+│  trips       │  │  PDFs        │  │  eu-west-3        │
+│  chat_msgs   │  │              │  │                   │
+└──────────────┘  └──────────────┘  └──────────────────┘
+```
+
+**Data flow for an AI request:**
+```
+User uploads image / enters text
+        │
+        ▼
+FastAPI /ai/process
+        ├── upload_image_to_blob()   → stores image  → Azure Blob
+        ├── call_nova_lite()         → AI analysis   → AWS Bedrock
+        ├── upload_trip_report_pdf() → creates PDF   → Azure Blob
+        └── save_trip_to_db()        → saves trip    → Azure SQL
+        │
+        ▼
+Response: itinerary, budget, image URL, PDF URL
+```
+
+---
+
+## Team Contributions
+
+### Vladyslav Dovhyi — Frontend
+
+Vladyslav was responsible for the entire frontend of the application. He designed and implemented the single-page application (SPA) in plain HTML, CSS, and Vanilla JavaScript. He built the navigation system between sections (Home, AI Trip Planner, About Us) without full page reloads. He implemented the authentication module `gateway_auth.js`, which manages JWT tokens in `localStorage`, displays the login/registration modal, and updates the UI after sign-in. He designed the chat-like interface for AI interaction, including image upload with preview. He ensured the AI Trip Planner section is accessible only to authenticated users, and implemented the admin UI for user management. He also configured Nginx as both the static file server and the reverse proxy to the backend.
+
+### Danil Kozhan — Backend & Database
+
+Danil was responsible for the design and implementation of the backend. He built the FastAPI application with all routers — authentication, trip management, chat history, and health-check endpoints. He defined the SQLAlchemy ORM models (`User`, `Trip`, `ChatMessage`) and Pydantic schemas for input and output validation. He implemented JWT authentication with roles (`user` / `admin`), including bcrypt password hashing and the `get_current_user` and `require_admin` dependency functions. He designed the database schema and wrote the initialisation SQL script. He ensured proper error handling and transaction rollback on database failure.
+
+### Andrii Denysenko — AI Integration & Cloud Infrastructure
+
+Andrii was responsible for cloud service integration and the AI pipeline. He implemented communication with AWS Bedrock (Amazon Nova Lite model) for multimodal image and text analysis, including parsing of the structured JSON response containing city, itinerary, budget, and tips. He implemented the upload of images and generated PDF reports to Azure Blob Storage. He configured Docker and Docker Compose to orchestrate both services (frontend and backend) and prepared `config.py` with management of all environment variables using a `dataclass`. He was also responsible for deploying and testing the complete solution in the cloud environment.
+
+---
+
+
 
 ## Features
 
@@ -91,31 +201,6 @@ GateWay/
 
 ---
 
-## Environment Variables
-
-Create a `.env` file in the project root (it is git-ignored). All variables below are required unless a default is shown.
-
-```env
-# ── Azure SQL ──────────────────────────────────────────────────────────────
-AZURE_SQL_CONNECTION_STRING=mssql+pyodbc://user:password@host/db?driver=ODBC+Driver+18+for+SQL+Server
-
-# ── Azure Blob Storage ─────────────────────────────────────────────────────
-AZURE_BLOB_CONNECTION_STRING=DefaultEndpointsProtocol=https;AccountName=...
-AZURE_BLOB_CONTAINER_NAME=travel-images   # default: travel-images
-
-# ── AWS Bedrock ────────────────────────────────────────────────────────────
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=eu-west-3                      # default: eu-west-3
-AWS_BEDROCK_MODEL_ID=eu.amazon.nova-2-lite-v1:0
-
-# ── JWT ────────────────────────────────────────────────────────────────────
-SECRET_KEY=your-secret-key-here
-JWT_EXPIRE_HOURS=1                        # default: 1
-```
-
----
-
 ## Running with Docker
 
 ```bash
@@ -123,8 +208,8 @@ JWT_EXPIRE_HOURS=1                        # default: 1
 git clone <repo-url>
 cd GateWay
 
-# 2. Create your .env file (see above)
-cp .env.example .env   # or create it manually
+# 2. Create your .env file with the required credentials
+#    (Azure SQL, Azure Blob, AWS Bedrock, JWT secret)
 
 # 3. Build and start all services
 docker compose up --build
