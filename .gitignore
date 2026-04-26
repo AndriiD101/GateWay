@@ -1,3 +1,4 @@
 .env
 .env.*
 docker_scripts.txt
+compose_scripts.txt

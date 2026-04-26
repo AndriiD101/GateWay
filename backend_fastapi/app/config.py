@@ -6,6 +6,28 @@ from dotenv import load_dotenv
 load_dotenv(override=False)
 
 
+def _get_jwt_expire_hours() -> int:
+    raw_hours = os.getenv("JWT_EXPIRE_HOURS", "").strip()
+    if raw_hours:
+        try:
+            value = int(raw_hours)
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+
+    raw_minutes = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "").strip()
+    if raw_minutes:
+        try:
+            minutes = int(raw_minutes)
+            if minutes > 0:
+                return max(1, (minutes + 59) // 60)
+        except ValueError:
+            pass
+
+    return 1
+
+
 @dataclass(frozen=True)
 class Settings:
     # ── Azure SQL (Travel AI trips/users) ─────────────────────────────────────
@@ -21,17 +43,14 @@ class Settings:
     aws_region: str = os.getenv("AWS_REGION", "eu-west-3")
     aws_bedrock_model_id: str = os.getenv("AWS_BEDROCK_MODEL_ID", "eu.amazon.nova-2-lite-v1:0")
 
-    # ── MySQL (auth / chat history) ───────────────────────────────────────────
-    db_host: str = os.getenv("DB_HOST", "127.0.0.1")
-    db_port: int = int(os.getenv("DB_PORT", "3306"))
-    db_user: str = os.getenv("DB_USER", "root")
-    db_password: str = os.getenv("DB_PASSWORD", "")
-    db_name: str = os.getenv("DB_NAME", "gateway_db")
-
     # ── JWT ───────────────────────────────────────────────────────────────────
-    secret_key: str = os.getenv("SECRET_KEY", "change-this-in-production!")
+    secret_key: str = (
+        os.getenv("SECRET_KEY", "").strip()
+        or os.getenv("JWT_SECRET_KEY", "").strip()
+        or "change-this-in-production!"
+    )
     jwt_algorithm: str = "HS256"
-    jwt_expire_hours: int = int(os.getenv("JWT_EXPIRE_HOURS", "1"))
+    jwt_expire_hours: int = _get_jwt_expire_hours()
 
 
 settings = Settings()

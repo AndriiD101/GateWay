@@ -14,8 +14,7 @@ combined/
 │   ├── config.py        ← All env-var settings (Settings dataclass)
 │   ├── auth.py          ← JWT create / decode / FastAPI dependencies
 │   ├── database.py      ← Azure SQL SQLAlchemy engine + get_db()
-│   ├── mysql_db.py      ← PyMySQL connection helper (auth/chat)
-│   ├── models.py        ← SQLAlchemy ORM models (User, Trip – Azure SQL)
+│   ├── models.py        ← SQLAlchemy ORM models (User, Trip, ChatMessage)
 │   ├── schemas.py       ← Pydantic request/response models
 │   ├── services.py      ← Blob upload, Bedrock AI, trip DB logic
 │   ├── routers/
@@ -28,20 +27,16 @@ combined/
 │       └── db_test.py   ← /db/* (Azure SQL health checks)
 ├── Dockerfile
 ├── requirements.txt
-├── schema_mysql.sql     ← Run once to set up MySQL tables
 └── .env.example
 ```
 
 ### Databases
 | Store | Used for |
 |---|---|
-| **MySQL** (`gateway_db`) | `users` table (auth), `chat_messages` table |
-| **Azure SQL** | `users` table (ORM / trips), `trips` table |
+| **Azure SQL** | `users` table (auth), `chat_messages` table, `trips` table |
 
-> The MySQL `users` table handles login/passwords. The Azure SQL `users` table
-> is used by the SQLAlchemy ORM for trip ownership. They share the same user
-> concept but are separate stores — wire them together via matching `user_id`
-> values once you integrate a front-end.
+> This backend uses Azure SQL only. SQLAlchemy creates required tables
+> (`users`, `chat_messages`, `trips`) on startup.
 
 ---
 
@@ -51,13 +46,10 @@ combined/
 # 1. Copy env file and fill in secrets
 cp .env.example .env
 
-# 2. Create MySQL schema
-mysql -u root -p gateway_db < schema_mysql.sql
-
-# 3. Install dependencies
+# 2. Install dependencies
 pip install -r requirements.txt
 
-# 4. Run
+# 3. Run
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -182,12 +174,3 @@ Response includes `parsed` (AI JSON), `trip` (saved trip), `pdf_url`, `image_url
 
 ---
 
-## Environment Variables
-
-See `.env.example` for the full list. Required groups:
-
-- **JWT**: `SECRET_KEY`, `JWT_EXPIRE_HOURS`
-- **MySQL**: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
-- **Azure SQL**: `AZURE_SQL_CONNECTION_STRING`
-- **Azure Blob**: `AZURE_BLOB_CONNECTION_STRING`, `AZURE_BLOB_CONTAINER_NAME`
-- **AWS Bedrock**: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_BEDROCK_MODEL_ID`

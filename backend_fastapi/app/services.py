@@ -4,6 +4,7 @@ import time
 import uuid
 import logging
 import textwrap
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from typing import Any
 import bcrypt
 import boto3
 from botocore.exceptions import ClientError
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas
 from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -287,6 +288,16 @@ def _build_trip_report_pdf_bytes(
     return bytes(pdf)
 
 
+def _extract_account_key_from_connection_string(conn_str: str) -> str | None:
+    """Extract AccountKey from Azure Storage connection string."""
+    if not conn_str:
+        return None
+    for part in conn_str.split(";"):
+        if part.startswith("AccountKey="):
+            return part.split("=", 1)[1]
+    return None
+
+
 def upload_trip_report_pdf_to_blob(
     *, city: str | None, itinerary: list[str], budget_estimate: str, tips: list[str]
 ) -> str:
@@ -295,10 +306,51 @@ def upload_trip_report_pdf_to_blob(
     )
     blob_client = _get_blob_client(f"reports/{uuid.uuid4().hex}.pdf")
     try:
-        blob_client.upload_blob(pdf_bytes, overwrite=False, content_type="application/pdf")
+        blob_client.upload_blob(
+            pdf_bytes,
+            overwrite=False,
+            content_settings=ContentSettings(
+                content_type="application/pdf",
+                content_disposition='attachment; filename="trip-itinerary.pdf"',
+            ),
+        )
     except Exception as exc:
+        logger.error(f"Blob upload error: {exc}", exc_info=True)
         raise HTTPException(status_code=502, detail=f"Failed to upload PDF: {exc}") from exc
-    return blob_client.url
+
+    # Return a short-lived signed URL so downloads work with private containers.
+    try:
+        expiry = datetime.now(timezone.utc) + timedelta(hours=2)
+        
+        # Try to extract account key from connection string
+        account_key = _extract_account_key_from_connection_string(
+            settings.azure_blob_connection_string
+        )
+
+        if account_key:
+            try:
+                sas = generate_blob_sas(
+                    account_name=blob_client.account_name,
+                    container_name=blob_client.container_name,
+                    blob_name=blob_client.blob_name,
+                    account_key=account_key,
+                    permission=BlobSasPermissions(read=True),
+                    expiry=expiry,
+                )
+                signed_url = f"{blob_client.url}?{sas}"
+                logger.info(f"Generated signed PDF URL for blob: {blob_client.blob_name}")
+                return signed_url
+            except Exception as sas_exc:
+                logger.error(f"SAS generation failed: {sas_exc}", exc_info=True)
+                logger.warning("Returning unsigned PDF URL as fallback")
+                return blob_client.url
+        else:
+            logger.warning("No account key found in connection string; returning unsigned PDF URL")
+            return blob_client.url
+            
+    except Exception as exc:
+        logger.error(f"PDF URL signing error: {exc}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"Failed to sign PDF URL: {exc}") from exc
 
 
 # ── Trip DB helpers ───────────────────────────────────────────────────────────

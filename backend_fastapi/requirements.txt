@@ -12,9 +12,6 @@ python-multipart>=0.0.9
 sqlalchemy>=2.0.0
 pyodbc>=5.1.0
 
-# Database – MySQL (for auth/chat tables, kept separate for compatibility)
-PyMySQL>=1.1.0
-
 # Azure Blob Storage
 azure-storage-blob>=12.19.0
 

@@ -3,6 +3,7 @@ import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.db_test import router as db_test_router
@@ -19,8 +20,8 @@ app = FastAPI(
     title="Travel AI – Combined Backend",
     version="2.0.0",
     description=(
-        "Unified backend combining JWT auth/chat (MySQL) "
-        "with Travel AI trips, blob storage, and AWS Bedrock (Azure SQL)."
+        "Unified backend for JWT auth/chat and Travel AI trips "
+        "with Azure SQL storage, Azure Blob, and AWS Bedrock."
     ),
 )
 
@@ -41,12 +42,47 @@ app.include_router(blob_router)    # /blob/health  /blob/upload-test
 app.include_router(db_test_router) # /db/health  /db/test-*
 
 
+def _ensure_auth_columns() -> None:
+    """Backfill legacy users table to match current auth model."""
+    with engine.begin() as conn:
+        table_exists = conn.execute(
+            text("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'users'")
+        ).scalar_one()
+        if not table_exists:
+            return
+
+        existing_columns = {
+            row[0]
+            for row in conn.execute(
+                text(
+                    "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'users'"
+                )
+            )
+        }
+
+        if "username" not in existing_columns:
+            conn.execute(text("ALTER TABLE users ADD username NVARCHAR(255) NULL"))
+            existing_columns.add("username")
+
+        if "role" not in existing_columns:
+            conn.execute(text("ALTER TABLE users ADD role NVARCHAR(32) NULL"))
+            existing_columns.add("role")
+
+        if "username" in existing_columns:
+            conn.execute(text("UPDATE users SET username = email WHERE username IS NULL"))
+
+        if "role" in existing_columns:
+            conn.execute(text("UPDATE users SET role = 'user' WHERE role IS NULL"))
+            conn.execute(text("ALTER TABLE users ALTER COLUMN role NVARCHAR(32) NOT NULL"))
+
+
 # ── Startup ───────────────────────────────────────────────────────────────────
 @app.on_event("startup")
 def on_startup() -> None:
     for attempt in range(3):
         try:
             Base.metadata.create_all(bind=engine)
+            _ensure_auth_columns()
             logger.info("Azure SQL schema initialised.")
             return
         except SQLAlchemyError as exc:
