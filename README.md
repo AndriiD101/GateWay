@@ -18,6 +18,7 @@
 - [API Reference](#api-reference)
 - [Database Schema](#database-schema)
 - [Authentication](#authentication)
+- [How to Use the Application](#how-to-use-the-application)
 - [Frontend](#frontend)
 
 ---
@@ -316,6 +317,70 @@ The schema is auto-created on startup by SQLAlchemy. The `db-init/gateway_init_c
 | `role` | varchar(32) | `user` or `assistant` |
 | `message` | text | Message content |
 | `created_at` | datetime | Server-generated timestamp |
+
+---
+
+## How to Use the Application
+
+This section walks through the full user flow from first visit to receiving a generated trip plan.
+
+---
+
+### Step 1 — Open the app and click Sign In
+
+You will see the GateWay home page. Click the **Sign In** button in the top-right corner of the navigation bar.
+
+![Home page – Sign In button](pictures/screenshot_01_home.png)
+
+---
+
+### Step 2 — Create an account
+
+The authentication modal opens on the **Register** tab by default. Enter a username and a password, then click **Create Account**. If you already have an account, click the *Sign In* link at the bottom of the modal to switch tabs.
+
+![Register modal](pictures/screenshot_02_register.png)
+
+---
+
+### Step 3 — Sign in with your credentials
+
+Switch to the **Sign In** tab, enter your username and password, and click **Sign In**.
+
+![Sign In modal](pictures/screenshot_03_signin.png)
+
+---
+
+### Step 4 — You are now logged in
+
+After a successful login the modal closes and the navigation bar updates to show your username and a **Log out** button. The **Sign In** button is replaced by your account info.
+
+![Logged-in home page](pictures/screenshot_04_loggedin.png)
+
+---
+
+### Step 5 — Open the AI Trip Planner
+
+Click **AI Trip Planner** in the navigation bar. You will land on the personal AI guide page where the assistant greets you and asks you to describe your dream trip — destination, number of days, and budget.
+
+![AI Trip Planner page](pictures/screenshot_05_planner.png)
+
+---
+
+### Step 6 — Describe your trip
+
+Type your request in the chat input at the bottom of the screen and press the send button (or hit Enter). You can also click the image icon to upload a travel photo instead of or alongside your text prompt.
+
+**Example input:** `5-day trip to Barcelona, $2000 budget`
+
+![Sending a prompt](pictures/screenshot_06_prompt.png)
+
+---
+
+### Step 7 — Receive your itinerary and download the PDF
+
+The AI returns a structured response that includes the detected city, estimated budget, a day-by-day itinerary, and practical travel tips. Below the response you will find a **Download your trip report (PDF)** link — click it to download a complete, formatted PDF version of your trip plan.
+
+![AI response with itinerary and PDF download link](pictures/screenshot_07_result.png)
 
 ---
 
