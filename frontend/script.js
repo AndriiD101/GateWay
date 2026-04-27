@@ -90,6 +90,27 @@ document.addEventListener("DOMContentLoaded", () => {
     logo.addEventListener("click", () => activatePage("home-page"));
   });
 
+  /*** USER DROPDOWN ***/
+
+  const userDropdown = document.getElementById("user-dropdown");
+  const userDropdownToggle = document.getElementById("user-dropdown-toggle");
+
+  if (userDropdownToggle && userDropdown) {
+    userDropdownToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      userDropdown.classList.toggle("open");
+      const isOpen = userDropdown.classList.contains("open");
+      userDropdownToggle.setAttribute("aria-expanded", isOpen);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!userDropdown.contains(e.target)) {
+        userDropdown.classList.remove("open");
+        userDropdownToggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
   /*** CHAT & IMAGE UPLOAD ***/
 
   const userInput = document.getElementById("user-input");
@@ -300,8 +321,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return response.json();
   }
 
-  /*** LOAD CHAT HISTORY ***/
-
   async function loadChatHistory() {
     try {
       const response = await fetch("/api/chat/history", {
@@ -312,7 +331,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const messages = await response.json();
       if (!messages || messages.length === 0) return;
 
-      // Clear default welcome message, then re-add it, then history
       chatMessages.innerHTML = "";
       addMessage(
         "Hi! I\u2019m your AI travel assistant. Tell me about your dream trip - where you want to go, for how many days, and what your budget is. I\u2019ll help you plan the perfect itinerary!",
@@ -326,7 +344,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch { /* silently skip */ }
   }
 
-  /*** EXPOSED FOR gateway_auth.js ***/
 
   window.initChatApp = function () {
     loadChatHistory();
@@ -399,3 +416,55 @@ document.addEventListener("DOMContentLoaded", () => {
     window.GatewayAuth.refreshUi();
   }
 });
+
+  document.addEventListener("DOMContentLoaded", function () {
+    var burgerBtn = document.getElementById("burger-btn");
+    var mobileMenu = document.getElementById("mobile-menu");
+    var mobileClose = document.getElementById("mobile-menu-close");
+
+    function openMenu() {
+      burgerBtn.classList.add("open");
+      mobileMenu.classList.add("open");
+      mobileMenu.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeMenu() {
+      burgerBtn.classList.remove("open");
+      mobileMenu.classList.remove("open");
+      mobileMenu.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+
+    if (burgerBtn) burgerBtn.addEventListener("click", openMenu);
+    if (mobileClose) mobileClose.addEventListener("click", closeMenu);
+
+    // Close on nav link click
+    if (mobileMenu) {
+      mobileMenu.querySelectorAll("a[href]").forEach(function (link) {
+        link.addEventListener("click", closeMenu);
+      });
+    }
+
+    var mobileLoginBtn = document.getElementById("mobile-open-login-btn");
+    var desktopLoginBtn = document.getElementById("open-login-btn");
+    if (mobileLoginBtn && desktopLoginBtn) {
+      mobileLoginBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        closeMenu();
+        setTimeout(function () {
+          desktopLoginBtn.click();
+        }, 300);
+      });
+    }
+
+    document.addEventListener("keydown", function (e) {
+      if (
+        e.key === "Escape" &&
+        mobileMenu &&
+        mobileMenu.classList.contains("open")
+      ) {
+        closeMenu();
+      }
+    });
+  });

@@ -25,6 +25,12 @@
               alt="logo"
             />
           </div>
+          <button class="burger-btn" id="burger-btn" aria-label="Open menu" type="button">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
           <ul class="header-list">
             <li>
               <a
@@ -58,29 +64,33 @@
                   class="user-profile-section"
                   style="display: none"
                 >
-                  <div class="user-badge">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="user-icon"
-                    >
-                      <path
-                        d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
-                      ></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    <span id="header-username" class="header-username"></span>
+                  <div class="user-dropdown" id="user-dropdown">
+                    <button class="user-dropdown-toggle" id="user-dropdown-toggle" type="button" aria-expanded="false">
+                      <div class="user-dropdown-avatar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                      </div>
+                      <div class="user-dropdown-info">
+                        <span class="user-dropdown-label">SIGNED IN</span>
+                        <span id="header-username" class="user-dropdown-name"></span>
+                      </div>
+                      <svg class="user-dropdown-chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                      </svg>
+                    </button>
+                    <div class="user-dropdown-menu" id="user-dropdown-menu">
+                      <a class="user-dropdown-logout" href="#" id="logout-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                          <polyline points="16 17 21 12 16 7"></polyline>
+                          <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Log Out
+                      </a>
+                    </div>
                   </div>
-                  <a class="header-item logout-link" href="#" id="logout-btn"
-                    >Log out</a
-                  >
                 </div>
               </div>
             </li>
@@ -294,7 +304,7 @@
               >
                 <img id="image-preview" src="" alt="Preview" />
                 <button id="remove-image-btn" class="remove-image-btn">
-                  ×
+                  &times;
                 </button>
               </div>
 
@@ -431,6 +441,17 @@
         </div>
       </section>
     </main>
+
+    <!-- Mobile Menu Overlay -->
+    <div class="mobile-menu" id="mobile-menu" aria-hidden="true">
+      <button class="mobile-menu-close" id="mobile-menu-close" aria-label="Close menu">&times;</button>
+      <a href="#hero-section" class="header-item" data-target="home-page">Home</a>
+      <a href="#ai-section" class="header-item" data-target="ai-section">AI Trip Planner</a>
+      <a href="#about-section" class="header-item" data-target="about-section">About Us</a>
+      <div id="mobile-auth-placeholder">
+        <a class="header-item accent" href="#" id="mobile-open-login-btn">Sign In</a>
+      </div>
+    </div>
 
     <footer class="footer montserrat">
       <div class="footer-content">
